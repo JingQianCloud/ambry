@@ -134,11 +134,11 @@ public class UndeleteOperation {
       requestRegistrationCallback.registerRequestToSend(this, requestInfo);
       replicaIterator.remove();
       if (RouterUtils.isRemoteReplica(routerConfig, replica)) {
-        LOGGER.trace("Making request with correlationId {} to a remote replica {} in {} ",
+        LOGGER.error("Making request with correlationId {} to a remote replica {} in {} ",
             undeleteRequest.getCorrelationId(), replica.getDataNodeId(), replica.getDataNodeId().getDatacenterName());
         routerMetrics.crossColoRequestCount.inc();
       } else {
-        LOGGER.trace("Making request with correlationId {} to a local replica {} ", undeleteRequest.getCorrelationId(),
+        LOGGER.error("Making request with correlationId {} to a local replica {} ", undeleteRequest.getCorrelationId(),
             replica.getDataNodeId());
       }
       routerMetrics.getDataNodeBasedMetrics(replica.getDataNodeId()).undeleteRequestRate.mark();
@@ -179,14 +179,14 @@ public class UndeleteOperation {
     routerMetrics.getDataNodeBasedMetrics(replica.getDataNodeId()).undeleteRequestLatencyMs.update(requestLatencyMs);
     // Check the error code from NetworkClient.
     if (responseInfo.getError() != null) {
-      LOGGER.trace("UndeleteRequest with response correlationId {} timed out for replica {} ",
+      LOGGER.error("UndeleteRequest with response correlationId {} timed out for replica {} ",
           undeleteRequest.getCorrelationId(), replica.getDataNodeId());
       onErrorResponse(replica, new RouterException(
           "Operation timed out because of " + responseInfo.getError() + " at DataNode " + responseInfo.getDataNode(),
           RouterErrorCode.OperationTimedOut));
     } else {
       if (undeleteResponse == null) {
-        LOGGER.trace(
+        LOGGER.error(
             "UndeleteRequest with response correlationId {} received UnexpectedInternalError on response deserialization for replica {} ",
             undeleteRequest.getCorrelationId(), replica.getDataNodeId());
         onErrorResponse(replica, new RouterException("Response deserialization received an unexpected error",
@@ -208,10 +208,10 @@ public class UndeleteOperation {
               // LIFE_VERSION_FROM_FRONTEND is an invalid lifeVersion
               && undeleteResponse.getLifeVersion() != MessageInfo.LIFE_VERSION_FROM_FRONTEND)) {
             if (RouterUtils.isRemoteReplica(routerConfig, replica)) {
-              LOGGER.trace("Cross colo request successful for remote replica {} in {} ", replica.getDataNodeId(),
-                  replica.getDataNodeId().getDatacenterName());
               routerMetrics.crossColoSuccessCount.inc();
             }
+            LOGGER.error("request successful for local or remote {} replica {} in {} ", undeleteResponse.getCorrelationId(),
+                replica.getDataNodeId(), replica.getDataNodeId().getDatacenterName());
             if (lifeVersion == null) {
               // This is first successful response.
               lifeVersion = undeleteResponse.getLifeVersion();
@@ -232,7 +232,7 @@ public class UndeleteOperation {
               }
             }
           } else if (serverError == ServerErrorCode.Disk_Unavailable) {
-            LOGGER.trace("Replica {} returned Disk_Unavailable for an undelete request with correlationId : {} ",
+            LOGGER.error("Replica {} returned Disk_Unavailable for an undelete request with correlationId : {} ",
                 replica, undeleteRequest.getCorrelationId());
             operationTracker.onResponse(replica, TrackedRequestFinalState.DISK_DOWN);
             setOperationException(
@@ -240,7 +240,7 @@ public class UndeleteOperation {
             routerMetrics.routerRequestErrorCount.inc();
             routerMetrics.getDataNodeBasedMetrics(replica.getDataNodeId()).undeleteRequestErrorCount.inc();
           } else {
-            LOGGER.trace("Replica {} returned an error {} for an undelete request with response correlationId : {} ",
+            LOGGER.error("Replica {} returned an error {} for an undelete request with response correlationId : {} ",
                 replica, serverError, undeleteRequest.getCorrelationId());
             RouterErrorCode routerErrorCode = processServerError(serverError);
             if (serverError == ServerErrorCode.Blob_Authorization_Failure) {

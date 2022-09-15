@@ -140,11 +140,11 @@ class DeleteOperation {
       requestRegistrationCallback.registerRequestToSend(this, requestInfo);
       replicaIterator.remove();
       if (RouterUtils.isRemoteReplica(routerConfig, replica)) {
-        logger.trace("Making request with correlationId {} to a remote replica {} in {} ",
+        logger.error("Making request with correlationId {} to a remote replica {} in {} ",
             deleteRequest.getCorrelationId(), replica.getDataNodeId(), replica.getDataNodeId().getDatacenterName());
         routerMetrics.crossColoRequestCount.inc();
       } else {
-        logger.trace("Making request with correlationId {} to a local replica {} ", deleteRequest.getCorrelationId(),
+        logger.error("Making request with correlationId {} to a local replica {} ", deleteRequest.getCorrelationId(),
             replica.getDataNodeId());
       }
       routerMetrics.getDataNodeBasedMetrics(replica.getDataNodeId()).deleteRequestRate.mark();
@@ -188,14 +188,14 @@ class DeleteOperation {
     routerMetrics.getDataNodeBasedMetrics(replica.getDataNodeId()).deleteRequestLatencyMs.update(requestLatencyMs);
     // Check the error code from NetworkClient.
     if (responseInfo.getError() != null) {
-      logger.trace("DeleteRequest with response correlationId {} timed out for replica {} ",
+      logger.error("DeleteRequest with response correlationId {} timed out for replica {} ",
           deleteRequest.getCorrelationId(), replica.getDataNodeId());
       onErrorResponse(replica, new RouterException(
           "Operation to delete " + blobId + " timed out because of " + responseInfo.getError() + " at DataNode "
               + responseInfo.getDataNode(), RouterErrorCode.OperationTimedOut));
     } else {
       if (deleteResponse == null) {
-        logger.trace(
+        logger.error(
             "DeleteRequest with response correlationId {} received UnexpectedInternalError on response deserialization for replica {} ",
             deleteRequest.getCorrelationId(), replica.getDataNodeId());
         onErrorResponse(replica, new RouterException("Response deserialization received an unexpected error",
@@ -216,12 +216,12 @@ class DeleteOperation {
           if (serverError == ServerErrorCode.No_Error || serverError == ServerErrorCode.Blob_Deleted) {
             operationTracker.onResponse(replica, TrackedRequestFinalState.SUCCESS);
             if (RouterUtils.isRemoteReplica(routerConfig, replica)) {
-              logger.trace("Cross colo request successful for remote replica {} in {} ", replica.getDataNodeId(),
-                  replica.getDataNodeId().getDatacenterName());
               routerMetrics.crossColoSuccessCount.inc();
             }
+            logger.error("request successful for local or remote replica {} in {} ", replica.getDataNodeId(),
+                replica.getDataNodeId().getDatacenterName());
           } else if (serverError == ServerErrorCode.Disk_Unavailable) {
-            logger.trace("Replica {} returned Disk_Unavailable for a delete request with correlationId : {} ", replica,
+            logger.error("Replica {} returned Disk_Unavailable for a delete request with correlationId : {} ", replica,
                 deleteRequest.getCorrelationId());
             operationTracker.onResponse(replica, TrackedRequestFinalState.DISK_DOWN);
             setOperationException(
@@ -229,7 +229,7 @@ class DeleteOperation {
             routerMetrics.routerRequestErrorCount.inc();
             routerMetrics.getDataNodeBasedMetrics(replica.getDataNodeId()).deleteRequestErrorCount.inc();
           } else {
-            logger.trace("Replica {} returned an error {} for a delete request with response correlationId : {} ",
+            logger.error("Replica {} returned an error {} for a delete request with response correlationId : {} ",
                 replica, serverError, deleteRequest.getCorrelationId());
             RouterErrorCode routerErrorCode = processServerError(serverError);
             if (serverError == ServerErrorCode.Blob_Authorization_Failure) {

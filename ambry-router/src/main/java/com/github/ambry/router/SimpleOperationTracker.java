@@ -276,7 +276,7 @@ class SimpleOperationTracker implements OperationTracker {
       // keeps the actual originating dc name (which is null). This value forces operation tracker to go through replicas
       // in all dc(s) rather than terminating on not found in originating dc.
       reassignedOriginDc = entryList.get(entryList.size() - 1).getKey();
-      logger.debug("Originating dc name is null and has been re-assigned to {}", reassignedOriginDc);
+      logger.error("Originating dc name is null and has been re-assigned to {}", reassignedOriginDc);
     }
 
     LinkedList<ReplicaId> backupReplicas = new LinkedList<>();
@@ -370,7 +370,7 @@ class SimpleOperationTracker implements OperationTracker {
       originatingDcNotFoundFailureThreshold = 0;
     }
     this.otIterator = new OpTrackerIterator();
-    logger.debug(
+    logger.error(
         "Router operation type: {}, successTarget = {}, parallelism = {}, originatingDcNotFoundFailureThreshold = {}, replicaPool = {}, originatingDC = {}",
         routerOperation, replicaSuccessTarget, replicaParallelism, originatingDcNotFoundFailureThreshold, replicaPool,
         originatingDcName);
@@ -414,7 +414,7 @@ class SimpleOperationTracker implements OperationTracker {
     if (hasFailedOnOriginatingDcNotFound()
         && originatingDcTotalReplicaCount - originatingDcNotFoundCount >= replicaSuccessTarget
         && originatingDcOfflineReplicaCount > 0) {
-      logger.info(
+      logger.error(
           "Terminating {} on {} due to Not_Found failure on some originatingDc replicas and some other originatingDc"
               + "replicas being offline. Originating Not_Found count: {}, failure threshold: {},"
               + "originatingDcOfflineReplicaCount: {}, originatingDcNameTotalReplicaCount: {},"
@@ -426,7 +426,7 @@ class SimpleOperationTracker implements OperationTracker {
     }
     if (hasFailedOnCrossColoNotFound() && allReplicaCount - totalNotFoundCount >= replicaSuccessTarget
         && totalOfflineReplicaCount > 0) {
-      logger.info(
+      logger.error(
           "Terminating {} on {} due to disk down count and total Not_Found count from eligible replicas and some "
               + "other replicas being unavailable. CrossColoEnabled: {}, DiskDownCount: {}, TotalNotFoundCount: {}, "
               + "TotalReplicaCount: {}, replicaSuccessTarget: {}, OfflineReplicaCount: {}, allReplicaCount: {} {} "
@@ -445,7 +445,7 @@ class SimpleOperationTracker implements OperationTracker {
       return false;
     }
     if (hasFailedOnOriginatingDcNotFound()) {
-      logger.info(
+      logger.error(
           "Terminating {} on {} due to Not_Found failure. Originating Not_Found count: {}, failure threshold: {},"
               + "originatingDcOfflineReplicaCount: {}, originatingDcNameTotalReplicaCount: {},"
               + "replicaSuccessTarget: {}, allReplicaCount: {} {}", routerOperation.name(), partitionId,
@@ -458,7 +458,7 @@ class SimpleOperationTracker implements OperationTracker {
     // Right now, this only applies for replica only partitions and may not be completely accurate if there are
     // failures responses other than not found.
     if (hasFailedOnCrossColoNotFound()) {
-      logger.info(
+      logger.error(
           "Terminating {} on {} due to disk down count and total Not_Found. CrossColoEnabled: {}, DiskDownCount: {},"
               + "TotalNotFoundCount: {}, TotalReplicaCount: {}, replicaSuccessTarget: {}, OfflineReplicaCount: {},"
               + "allReplicaCount: {} {} replicasByState = {}", routerOperation, partitionId, crossColoEnabled, diskDownCount,

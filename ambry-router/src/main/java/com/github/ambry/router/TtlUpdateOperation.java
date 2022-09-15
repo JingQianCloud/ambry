@@ -136,11 +136,11 @@ class TtlUpdateOperation {
       requestRegistrationCallback.registerRequestToSend(this, requestInfo);
       replicaIterator.remove();
       if (RouterUtils.isRemoteReplica(routerConfig, replica)) {
-        LOGGER.trace("Making request with correlationId {} to a remote replica {} in {} ",
+        LOGGER.error("Making request with correlationId {} to a remote replica {} in {} ",
             ttlUpdateRequest.getCorrelationId(), replica.getDataNodeId(), replica.getDataNodeId().getDatacenterName());
         routerMetrics.crossColoRequestCount.inc();
       } else {
-        LOGGER.trace("Making request with correlationId {} to a local replica {} ", ttlUpdateRequest.getCorrelationId(),
+        LOGGER.error("Making request with correlationId {} to a local replica {} ", ttlUpdateRequest.getCorrelationId(),
             replica.getDataNodeId());
       }
       routerMetrics.getDataNodeBasedMetrics(replica.getDataNodeId()).ttlUpdateRequestRate.mark();
@@ -181,14 +181,14 @@ class TtlUpdateOperation {
     routerMetrics.getDataNodeBasedMetrics(replica.getDataNodeId()).ttlUpdateRequestLatencyMs.update(requestLatencyMs);
     // Check the error code from NetworkClient.
     if (responseInfo.getError() != null) {
-      LOGGER.debug("TtlUpdateRequest with response correlationId {} timed out for replica {} ",
+      LOGGER.error("TtlUpdateRequest with response correlationId {} timed out for replica {} ",
           ttlUpdateRequest.getCorrelationId(), replica.getDataNodeId());
       onErrorResponse(replica, new RouterException(
           "Operation timed out because of " + responseInfo.getError() + " at DataNode " + responseInfo.getDataNode(),
           RouterErrorCode.OperationTimedOut));
     } else {
       if (ttlUpdateResponse == null) {
-        LOGGER.debug(
+        LOGGER.error(
             "TtlUpdateRequest with response correlationId {} received UnexpectedInternalError on response deserialization for replica {} ",
             ttlUpdateRequest.getCorrelationId(), replica.getDataNodeId());
         onErrorResponse(replica, new RouterException("Response deserialization received an unexpected error",
@@ -209,12 +209,12 @@ class TtlUpdateOperation {
           if (serverError == ServerErrorCode.No_Error || serverError == ServerErrorCode.Blob_Already_Updated) {
             operationTracker.onResponse(replica, TrackedRequestFinalState.SUCCESS);
             if (RouterUtils.isRemoteReplica(routerConfig, replica)) {
-              LOGGER.trace("Cross colo request successful for remote replica {} in {} ", replica.getDataNodeId(),
-                  replica.getDataNodeId().getDatacenterName());
               routerMetrics.crossColoSuccessCount.inc();
             }
+            LOGGER.error("Cross colo request or local {} successful for local or remote replica {} in {} ",
+                ttlUpdateRequest.getCorrelationId(), replica.getDataNodeId(), replica.getDataNodeId().getDatacenterName());
           } else if (serverError == ServerErrorCode.Disk_Unavailable) {
-            LOGGER.debug(
+            LOGGER.error(
                 "Replica {} returned Disk_Unavailable for a Ttl update request with response correlationId : {} ",
                 replica.getDataNodeId(), ttlUpdateResponse.getCorrelationId());
             operationTracker.onResponse(replica, TrackedRequestFinalState.DISK_DOWN);
@@ -222,7 +222,7 @@ class TtlUpdateOperation {
                 new RouterException("Server returned: " + serverError, RouterErrorCode.AmbryUnavailable));
             routerMetrics.getDataNodeBasedMetrics(replica.getDataNodeId()).ttlUpdateRequestErrorCount.inc();
           } else {
-            LOGGER.debug("Replica {} returned an error {} for a Ttl update request with response correlationId : {} ",
+            LOGGER.error("Replica {} returned an error {} for a Ttl update request with response correlationId : {} ",
                 replica.getDataNodeId(), serverError, ttlUpdateResponse.getCorrelationId());
             RouterErrorCode routerErrorCode = processServerError(serverError);
             if (ttlUpdateResponse.getError() == ServerErrorCode.Blob_Authorization_Failure) {

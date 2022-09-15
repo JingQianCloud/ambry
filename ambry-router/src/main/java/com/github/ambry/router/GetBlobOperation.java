@@ -945,11 +945,11 @@ class GetBlobOperation extends GetOperation {
         correlationIdToGetChunk.put(correlationId, this);
         requestRegistrationCallback.registerRequestToSend(GetBlobOperation.this, requestInfo);
         if (RouterUtils.isRemoteReplica(routerConfig, replicaId)) {
-          logger.trace("Making request with correlationId {} to a remote replica {} in {} ", correlationId,
+          logger.error("Making request with correlationId {} to a remote replica {} in {} ", correlationId,
               replicaId.getDataNodeId(), replicaId.getDataNodeId().getDatacenterName());
           routerMetrics.crossColoRequestCount.inc();
         } else {
-          logger.trace("Making request with correlationId {} to a local replica {}", correlationId,
+          logger.error("Making request with correlationId {} to a local replica {}", correlationId,
               replicaId.getDataNodeId());
         }
         routerMetrics.getDataNodeBasedMetrics(replicaId.getDataNodeId()).getRequestRate.mark();
@@ -1061,14 +1061,14 @@ class GetBlobOperation extends GetOperation {
         // responseInfo.getError() returns NetworkClientErrorCode. If error is not null, it probably means (1) connection
         // checkout timed out; (2) pending connection timed out; (3) established connection timed out. In all these cases,
         // the latency histogram in adaptive operation tracker should not be updated.
-        logger.trace("GetBlobRequest with response correlationId {} timed out for replica {} ", correlationId,
+        logger.error("GetBlobRequest with response correlationId {} timed out for replica {} ", correlationId,
             getRequestInfo.getReplicaId().getDataNodeId());
         onErrorResponse(getRequestInfo.getReplicaId(), buildChunkException(
             "Operation timed out because of " + responseInfo.getError() + " at DataNode " + responseInfo.getDataNode(),
             RouterErrorCode.OperationTimedOut));
       } else {
         if (getResponse == null) {
-          logger.trace(
+          logger.error(
               "GetBlobRequest with response correlationId {} received an unexpected error on response deserialization from replica {} ",
               correlationId, getRequestInfo.getReplicaId().getDataNodeId());
           onErrorResponse(getRequestInfo.getReplicaId(),
@@ -1080,7 +1080,7 @@ class GetBlobOperation extends GetOperation {
             // out over a connection id, and the response received on a connection id must be for the latest request
             // sent over it. The check here ensures that is indeed the case. If not, log an error and fail this request.
             // There is no other way to handle it.
-            logger.trace("GetBlobRequest with response correlationId {} mismatch from response {} for replica {} ",
+            logger.error("GetBlobRequest with response correlationId {} mismatch from response {} for replica {} ",
                 correlationId, getResponse.getCorrelationId(), getRequestInfo.getReplicaId().getDataNodeId());
             routerMetrics.unknownReplicaResponseError.inc();
             onErrorResponse(getRequestInfo.getReplicaId(), buildChunkException(
@@ -1094,7 +1094,7 @@ class GetBlobOperation extends GetOperation {
             } catch (IOException | MessageFormatException e) {
               // This should really not happen. Again, we do not notify the ResponseHandler responsible for failure
               // detection.
-              logger.trace(
+              logger.error(
                   "GetBlobRequest with response correlationId {} response deserialization failed for replica {} ",
                   correlationId, getRequestInfo.getReplicaId().getDataNodeId());
               routerMetrics.responseDeserializationErrorCount.inc();
@@ -1191,12 +1191,14 @@ class GetBlobOperation extends GetOperation {
               handleBody(getResponse.getInputStream(), messageMetadata, messageInfo);
               chunkOperationTracker.onResponse(getRequestInfo.getReplicaId(), TrackedRequestFinalState.SUCCESS);
               if (RouterUtils.isRemoteReplica(routerConfig, getRequestInfo.getReplicaId())) {
-                logger.trace("Cross colo request successful for remote replica in {} ",
-                    getRequestInfo.getReplicaId().getDataNodeId().getDatacenterName());
                 routerMetrics.crossColoSuccessCount.inc();
               }
+              logger.error("Cross colo request or local request {} successful for remote replica in {} ",
+                  getResponse.getCorrelationId(), getRequestInfo.getReplicaId().getDataNodeId());
             }
           } else {
+            logger.error("GetBlobRequest correlationId {} from node {} returned error {} ",
+                getResponse.getCorrelationId(), getRequestInfo.getReplicaId().getDataNodeId(), getError);
             if (chunkBlobId.getBlobDataType() == BlobId.BlobDataType.DATACHUNK
                 && getError == ServerErrorCode.Blob_Not_Found) {
               // Missing a data chunk
@@ -1226,7 +1228,7 @@ class GetBlobOperation extends GetOperation {
           }
         }
       } else {
-        logger.trace("Replica {} returned an error {} for a GetBlobRequest with response correlationId : {} ",
+        logger.error("Replica {} returned an error {} for a GetBlobRequest with response correlationId : {} ",
             getRequestInfo.getReplicaId().getDataNodeId(), getError, getResponse.getCorrelationId());
         // process and set the most relevant exception.
         onErrorResponse(getRequestInfo.getReplicaId(),

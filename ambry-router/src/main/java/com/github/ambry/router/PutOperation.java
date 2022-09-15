@@ -1505,11 +1505,11 @@ class PutOperation {
         requestRegistrationCallback.registerRequestToSend(PutOperation.this, requestInfo);
         replicaIterator.remove();
         if (RouterUtils.isRemoteReplica(routerConfig, replicaId)) {
-          logger.debug("{}: Making request with correlationId {} to a remote replica {} in {}", loggingContext,
+          logger.error("{}: Making request with correlationId {} to a remote replica {} in {}", loggingContext,
               correlationId, replicaId.getDataNodeId(), replicaId.getDataNodeId().getDatacenterName());
           routerMetrics.crossColoRequestCount.inc();
         } else {
-          logger.trace("{}: Making request with correlationId {} to a local replica {}", loggingContext, correlationId,
+          logger.error("{}: Making request with correlationId {} to a local replica {}", loggingContext, correlationId,
               replicaId.getDataNodeId());
         }
         routerMetrics.getDataNodeBasedMetrics(replicaId.getDataNodeId()).putRequestRate.mark();
@@ -1586,7 +1586,7 @@ class PutOperation {
       boolean isSuccessful;
       TrackedRequestFinalState putRequestFinalState = null;
       if (responseInfo.getError() != null) {
-        logger.debug("{}: PutRequest with response correlationId {} timed out for replica {} ", loggingContext,
+        logger.error("{}: PutRequest with response correlationId {} timed out for replica {} ", loggingContext,
             correlationId, requestInfo.getReplicaId().getDataNodeId());
         setChunkException(new RouterException(
             "Operation timed out because of " + responseInfo.getError() + " at DataNode " + responseInfo.getDataNode(),
@@ -1595,7 +1595,7 @@ class PutOperation {
         putRequestFinalState = TrackedRequestFinalState.FAILURE;
       } else {
         if (putResponse == null) {
-          logger.debug(
+          logger.error(
               "{}: PutRequest with response correlationId {} received an unexpected error on response deserialization from replica {} ",
               loggingContext, correlationId, requestInfo.getReplicaId().getDataNodeId());
           setChunkException(new RouterException("Response deserialization received an unexpected error",
@@ -1620,11 +1620,11 @@ class PutOperation {
           } else {
             ServerErrorCode putError = putResponse.getError();
             if (putError == ServerErrorCode.No_Error) {
-              logger.trace("{}: The putRequest was successful for chunk {}", loggingContext, chunkIndex);
+              logger.error("{}: The putRequest was successful for chunk {}", loggingContext, chunkIndex);
               isSuccessful = true;
             } else {
               // chunkException will be set within processServerError.
-              logger.trace(
+              logger.error(
                   "{}: Replica {} returned an error {} for a PutRequest with response correlationId : {} and blobId {}",
                   loggingContext, requestInfo.getReplicaId(), putResponse.getError(), putResponse.getCorrelationId(),
                   blobId);
@@ -1640,10 +1640,10 @@ class PutOperation {
       if (isSuccessful) {
         operationTracker.onResponse(requestInfo.getReplicaId(), TrackedRequestFinalState.SUCCESS);
         if (RouterUtils.isRemoteReplica(routerConfig, requestInfo.getReplicaId())) {
-          logger.trace("{}: Cross colo request successful for remote replica in {} ", loggingContext,
-              requestInfo.getReplicaId().getDataNodeId().getDatacenterName());
           routerMetrics.crossColoSuccessCount.inc();
         }
+        logger.error("{}: Cross colo request or local request {} successful for remote replica in {} ", loggingContext,
+            correlationId, requestInfo.getReplicaId().getDataNodeId());
       } else {
         onErrorResponse(requestInfo.getReplicaId(), putRequestFinalState);
       }
