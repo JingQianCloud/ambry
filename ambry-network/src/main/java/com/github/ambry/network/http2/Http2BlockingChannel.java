@@ -104,7 +104,7 @@ public class Http2BlockingChannel implements ConnectedChannel {
     Channel streamChannel;
     try {
       streamChannel =
-          channelPool.acquire().get(http2ClientConfig.http2BlockingChannelAcquireTimeoutMs, TimeUnit.MILLISECONDS);
+          channelPool.acquire().get(100000000, TimeUnit.MILLISECONDS);
     } catch (Exception e) {
       throw new IOException("Can't acquire stream channel from " + getRemoteHost() + ":" + getRemotePort(), e);
     }
@@ -113,7 +113,7 @@ public class Http2BlockingChannel implements ConnectedChannel {
     streamChannel.attr(RESPONSE_PROMISE).set(responsePromise);
     streamChannel.attr(CHANNEL_POOL_ATTRIBUTE_KEY).set(channelPool);
     boolean success = streamChannel.writeAndFlush(request)
-        .awaitUninterruptibly(http2ClientConfig.http2BlockingChannelSendTimeoutMs, TimeUnit.MILLISECONDS);
+        .awaitUninterruptibly(100000000, TimeUnit.MILLISECONDS);
     if (!success) {
       if (streamChannel.attr(RESPONSE_PROMISE).getAndSet(null) != null) {
         channelPool.release(streamChannel);
@@ -125,7 +125,7 @@ public class Http2BlockingChannel implements ConnectedChannel {
     ByteBuf responseByteBuf;
     try {
       responseByteBuf =
-          responsePromise.get(http2ClientConfig.http2BlockingChannelReceiveTimeoutMs, TimeUnit.MILLISECONDS);
+          responsePromise.get(100000000, TimeUnit.MILLISECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       if (streamChannel.attr(RESPONSE_PROMISE).getAndSet(null) != null) {
         channelPool.release(streamChannel);
