@@ -19,8 +19,8 @@
             <AppenderRef ref="publicAccessAppender"/>
         </Logger>
 
-        <Logger name="com.github.ambry.frontend" level="trace" />
-        <Logger name="com.github.ambry.rest" level="trace" />
-        <Logger name="com.github.ambry.named" level="trace" />
+        <Logger name="com.github.ambry.frontend" level="info" />
+        <Logger name="com.github.ambry.rest" level="info" />
+        <Logger name="com.github.ambry.named" level="info" />
     </Loggers>
 </Configuration>

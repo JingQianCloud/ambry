@@ -234,13 +234,13 @@ public class OperationController implements Runnable {
   }
 
   private List<ChunkInfo> flattenChunkIds(List<ChunkInfo> chunksToStitch, QuotaChargeCallback quotaChargeCallback)
-      throws RouterException, ExecutionException, InterruptedException {
+      throws RouterException, ExecutionException, InterruptedException { // JING CODE
 
     List<ChunkInfo> chunkInfos = new ArrayList<>();
-    logger.info("Operation controller | Flattening chunk ids. Received chunks to stitch {}", chunksToStitch);
+    logger.info("JING 5MB | Operation controller | Flattening chunk ids. Received chunks to stitch {}", chunksToStitch);
     for (ChunkInfo chunkInfo : chunksToStitch) {
       BlobId blobId = RouterUtils.getBlobIdFromString(chunkInfo.getBlobId(), clusterMap);
-      logger.info("Operation controller | Flattening chunk ids. Blob id {}, Blob data type {}", blobId,
+      logger.info("S3 5MB | Operation controller | Flattening chunk ids. Blob id {}, Blob data type {}", blobId,
           blobId.getBlobDataType());
       if (blobId.getBlobDataType() == METADATA) {
         final FutureResult<GetBlobResult> futureResult = new FutureResult<>();
@@ -248,11 +248,11 @@ public class OperationController implements Runnable {
         GetBlobOptionsInternal optionsInternal = new GetBlobOptionsInternal(options, true, routerMetrics.ageAtGet);
         getBlob(chunkInfo.getBlobId(), optionsInternal, (futureResult::done), quotaChargeCallback);
         GetBlobResult getBlobResult = futureResult.get();
-        logger.info("Operation controller | Flattening chunk ids. Received list of chunk ids for composite blob {}, {}",
+        logger.info("S3 5MB | Operation controller | Flattening chunk ids. Received list of chunk ids for composite blob {}, {}",
             blobId, getBlobResult.getBlobChunkIds());
         for (StoreKey blobChunkId : getBlobResult.getBlobChunkIds()) {
           // Get blob Info
-          logger.info("Operation controller | Flattening chunk ids. Getting blob info for nested chunk id {}",
+          logger.info("S3 5MB | Operation controller | Flattening chunk ids. Getting blob info for nested chunk id {}",
               blobChunkId);
           final FutureResult<GetBlobResult> futureResultBlobInfo = new FutureResult<>();
           GetBlobOptions optionsBlobInfo =
@@ -261,17 +261,17 @@ public class OperationController implements Runnable {
               new GetBlobOptionsInternal(optionsBlobInfo, false, routerMetrics.ageAtGet);
           getBlob(blobChunkId.getID(), optionsInternalBlobInfo, (futureResultBlobInfo::done), quotaChargeCallback);
           GetBlobResult blobInfo = futureResultBlobInfo.get();
-          logger.info("Operation controller | Flattening chunk ids. Got blob info for nested chunk id {}. Blob size {}",
+          logger.info("S3 5MB | Operation controller | Flattening chunk ids. Got blob info for nested chunk id {}. Blob size {}",
               blobChunkId, blobInfo.getBlobInfo().getBlobProperties().getBlobSize());
           ChunkInfo subChunkInfo =
               new ChunkInfo(blobChunkId.getID(), blobInfo.getBlobInfo().getBlobProperties().getBlobSize(),
                   chunkInfo.getExpirationTimeInMs(), chunkInfo.getReservedMetadataId());
-          logger.info("Operation controller | Flattening chunk ids. Adding individual chunk id {} for stitching",
+          logger.info("S3 5MB | Operation controller | Flattening chunk ids. Adding individual chunk id {} for stitching",
               subChunkInfo);
           chunkInfos.add(subChunkInfo);
         }
       } else {
-        logger.info("Operation controller | Flattening chunk ids. Adding simple blob id {} directly", blobId);
+        logger.info("S3 5MB | Operation controller | Flattening chunk ids. Adding simple blob id {} directly", blobId);
         chunkInfos.add(chunkInfo);
       }
     }

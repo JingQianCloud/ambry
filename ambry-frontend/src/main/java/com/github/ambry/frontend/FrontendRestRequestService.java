@@ -335,7 +335,7 @@ class FrontendRestRequestService implements RestRequestService {
             (result, exception) -> submitResponse(restRequest, restResponseChannel, result, exception));
       } else if (requestPath.matchesOperation(NAMED_BLOB)) {
         // S3 sends POST for multipart uploads. Eg url:-
-        // POST /s3/named-blob-sandbox/checkpoints/246cd68fa3480b2b0f9e6524fa473bca/shared/28774e7f-f490-4c25-9fb6-90eacbb3645f?uploads HTTP/1.1
+        // POST /s3/named-blob-sandbox/checkpoints/246cd68fa3480b2b0f9e6524fa473bca/shared/28774e7f-f490-4c25-9fb6-90eacbb3645f?uploads
         namedBlobPostHandler.handle(restRequest, restResponseChannel,
             (r, e) -> submitResponse(restRequest, restResponseChannel, r, e));
       } else {

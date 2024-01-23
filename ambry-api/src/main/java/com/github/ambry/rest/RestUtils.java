@@ -463,6 +463,7 @@ public class RestUtils {
      */
     public static final String S3_BUCKET = KEY_PREFIX + "s3-bucket";
 
+    public static final String S3_BLOB_LIST = KEY_PREFIX + "s3-blob-list";
     /**
      * Stores the file name.
      */

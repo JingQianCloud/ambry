@@ -246,7 +246,7 @@ public class RouterConfig {
    */
   @Config(ROUTER_MAX_PUT_CHUNK_SIZE_BYTES)
   @Default("4*1024*1024")
-  public final int routerMaxPutChunkSizeBytes;
+  public final int routerMaxPutChunkSizeBytes; // chunk size
 
   /**
    * The maximum number of parallel requests issued at a time by the put manager for a chunk.
@@ -793,9 +793,9 @@ public class RouterConfig {
         verifiableProperties.getIntInRange(ROUTER_CONNECTIONS_WARM_UP_TIMEOUT_MS, 5000, 0, Integer.MAX_VALUE);
     routerConnectionCheckoutTimeoutMs =
         verifiableProperties.getIntInRange(ROUTER_CONNECTION_CHECKOUT_TIMEOUT_MS, 1000, 1, 5000);
-    routerRequestTimeoutMs = verifiableProperties.getIntInRange(ROUTER_REQUEST_TIMEOUT_MS, 4000, 1,
+    routerRequestTimeoutMs = verifiableProperties.getIntInRange(ROUTER_REQUEST_TIMEOUT_MS, 400000, 1,
         MAX_OVERALL_TIMEOUT_VALUE_FOR_A_REQUEST_IN_MS);
-    routerRequestNetworkTimeoutMs = verifiableProperties.getIntInRange(ROUTER_REQUEST_NETWORK_TIMEOUT_MS, 2000, 1,
+    routerRequestNetworkTimeoutMs = verifiableProperties.getIntInRange(ROUTER_REQUEST_NETWORK_TIMEOUT_MS, 60000, 1,
         MAX_NETWORK_TIMEOUT_VALUE_FOR_A_REQUEST_IN_MS);
     routerDropRequestOnTimeout = verifiableProperties.getBoolean(ROUTER_DROP_REQUEST_ON_TIMEOUT, false);
     routerMaxPutChunkSizeBytes =

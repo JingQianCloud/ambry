@@ -56,14 +56,14 @@ public class NamedBlobPath {
     // S3 can issue "HEAD /s3/named-blob-sandbox" on the bucket-name.
     // The converted named blob would be /named/named-blob-sandbox/container-a. So, don't check for number of expected
     // segments for S3 as of now
-    /*
+    // url: /s3/named-blob-sandbox/?prefix=checkpoints%2F31b4b01aa9e49e93d3d4ab53cf5bc7db%2Fshared%2Fe2d717f4-fb2c-4a1f-9740-f85f8a177470%2F&delimiter=%2F&max-keys=1&encoding-type=url
     int expectedSegments = isListRequest ? 3 : 4;
     if (splitPath.length != expectedSegments || !Operations.NAMED_BLOB.equalsIgnoreCase(splitPath[0])) {
-      throw new RestServiceException(String.format(
-          "Path must have format '/named/<account_name>/<container_name>%s.  Received path='%s', blobNamePrefix='%s'",
-          isListRequest ? "" : "/<blob_name>'", path, blobNamePrefix), RestServiceErrorCode.BadRequest);
+      String exp = String.format(
+              "JING Path must have format '/named/<account_name>/<container_name>%s.  Received path='%s', blobNamePrefix='%s'",
+              isListRequest ? "" : "/<blob_name>'", path, blobNamePrefix);
+      System.err.println(exp); // It's the list command: path is "named/named-blob-sandbox/container-a/". It's split to 4 and the last one is a emtry string
     }
-    */
     String accountName = splitPath[1];
     String containerName = splitPath[2];
     if (isListRequest) {
@@ -78,6 +78,8 @@ public class NamedBlobPath {
               String.format("Blob name maximum length should be less than %s", MAX_BLOB_NAME_LENGTH),
               RestServiceErrorCode.BadRequest);
         }
+      } else {
+        System.err.println("S3 API | empty blob name");
       }
       return new NamedBlobPath(accountName, containerName, blobName, null, null);
     }

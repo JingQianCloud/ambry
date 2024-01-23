@@ -13,6 +13,7 @@
  */
 package com.github.ambry.frontend;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.github.ambry.account.AccountService;
@@ -92,6 +93,8 @@ public class NamedBlobPostHandler {
       EnumSet.of(AmbryUnavailable, ChannelClosed, UnexpectedInternalError, OperationTimedOut);
   private final DeleteBlobHandler deleteBlobHandler;
   private final UrlSigningService urlSigningService;
+
+  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
    * Constructs a handler for handling requests for uploading or stitching blobs.
@@ -199,14 +202,15 @@ public class NamedBlobPostHandler {
      */
     private Callback<Void> securityPostProcessRequestCallback(BlobInfo blobInfo) {
       return buildCallback(frontendMetrics.putSecurityPostProcessRequestMetrics, securityCheckResult -> {
-
+        // setup the multi-part upload
         if (restRequest.getArgs().containsKey("uploads")) {
           restRequest.setArg(RestUtils.Headers.URL_TYPE, "POST");
           restRequest.setArg(RestUtils.Headers.URL_TTL, "300");
           restRequest.setArg(RestUtils.Headers.MAX_UPLOAD_SIZE, "5242880");
           restRequest.setArg(RestUtils.Headers.CHUNK_UPLOAD, "true");
 
-          // Create signed url
+          // Create signed url: http://localhost:1174/?x-ambry-ttl=2419200&x-ambry-service-id=Flink-S3-Client&x-ambry-content-type=application%2Foctet-stream&x-ambry-chunk-upload=true&x-ambry-url-type=POST&x-ambry-session=51e2439f-e74d-4765-b30d-719ae584d964&et=1704839193
+          // signedUrl = uploadId
           String signedUrl = urlSigningService.getSignedUrl(restRequest);
           LOGGER.debug("NamedBlobPostHandler | Generated {} from {}", signedUrl, restRequest);
 
@@ -214,7 +218,7 @@ public class NamedBlobPostHandler {
           String bucket = (String) restRequest.getArgs().get(S3_BUCKET);
           String key = (String) restRequest.getArgs().get(S3_KEY);
           LOGGER.info(
-              "NamedBlobPostHandler | Sending response for Multipart begin upload. Bucket = {}, Key = {}, Upload Id = {}",
+              "S3 5MB | NamedBlobPostHandler | Sending response for Multipart begin upload. Bucket = {}, Key = {}, Upload Id = {}",
               bucket, key, signedUrl);
           InitiateMultipartUploadResult initiateMultipartUploadResult = new InitiateMultipartUploadResult();
           initiateMultipartUploadResult.setBucket(bucket);
@@ -232,7 +236,7 @@ public class NamedBlobPostHandler {
 
           finalCallback.onCompletion(channel, null);
         } else if (restRequest.getArgs().containsKey("uploadId")) {
-          LOGGER.info("NamedBlobPostHandler | Received complete multipart upload request");
+          LOGGER.info("S3 5MB | NamedBlobPostHandler | Received complete multipart upload request");
           RetainingAsyncWritableChannel channel =
               new RetainingAsyncWritableChannel(frontendConfig.maxJsonRequestSizeBytes);
           restRequest.readInto(channel, fetchStitchRequestBodyCallback(channel, blobInfo));
@@ -260,7 +264,7 @@ public class NamedBlobPostHandler {
       try (InputStream inputStream = channel.consumeContentAsInputStream()) {
         ObjectMapper objectMapper = new XmlMapper();
         completeMultipartUpload = objectMapper.readValue(inputStream, CompleteMultipartUpload.class);
-        LOGGER.info("NamedBlobPostHandler | deserialized xml {}", completeMultipartUpload);
+        LOGGER.info("S3 5MB | NamedBlobPostHandler | deserialized xml {}", completeMultipartUpload);
       } catch (IOException e) {
         throw new RestServiceException("Could not parse xml request body", e, RestServiceErrorCode.BadRequest);
       }
@@ -432,13 +436,50 @@ public class NamedBlobPostHandler {
       String reservedMetadataBlobId = null;
       List<String> signedChunkIds = new ArrayList<>();
 
-      LOGGER.info("NamedBlobPostHandler | received parts are {}", completeMultipartUpload.getPart());
-
-      for (Part part : completeMultipartUpload.getPart()) {
-        LOGGER.info("NamedBlobPostHandler | part is {}", part);
-        signedChunkIds.add(part.geteTag());
+      LOGGER.info("JING 5MB | stitch | received {} parts are {}", completeMultipartUpload.getPart().length, completeMultipartUpload.getPart());
+      List<ChunkInfo> chunksToStitch = new ArrayList<>(signedChunkIds.size()); // JING CODE
+      String expectedSession = null;
+      long totalStitchedBlobSize = 0;
+      if (completeMultipartUpload.getPart().length == 0) {
+        throw new RestServiceException("Must provide at least one ID in stitch request",
+            RestServiceErrorCode.MissingArgs);
       }
 
+      try {
+        for (Part part : completeMultipartUpload.getPart()) {
+          LOGGER.info("JING 5MB | stitch | part is {} {}", part);
+          signedChunkIds.add(part.geteTag());
+          // pass the etag
+          JsonNode jsonNode = objectMapper.readTree(part.geteTag());
+          jsonNode = jsonNode.get("chunks");
+          if (jsonNode.isArray()) {
+            for (final JsonNode objNode : jsonNode) {
+              String blobId = objNode.get("blob").textValue();
+              Long chunkSizeBytes = objNode.get("size").longValue();
+              totalStitchedBlobSize += chunkSizeBytes;
+              chunksToStitch.add(new ChunkInfo(blobId, chunkSizeBytes, -1, reservedMetadataBlobId));
+              LOGGER.info("JING 5MB | stitch entry | {} {}", blobId, chunkSizeBytes);
+            }
+          } else if (jsonNode.isObject()) {
+            String blobId = jsonNode.get("blob").textValue();
+            Long chunkSizeBytes = jsonNode.get("size").longValue();
+            totalStitchedBlobSize += chunkSizeBytes;
+            chunksToStitch.add(new ChunkInfo(blobId, chunkSizeBytes, -1, reservedMetadataBlobId));
+            LOGGER.info("JING 5MB | stitch single | {} {}", blobId, chunkSizeBytes);
+          } else {
+            LOGGER.info("JING 5MB | what's this {}", jsonNode);
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.info("JING 5MB | stitch | exception", e);
+        throw new RestServiceException("Wrong argument", RestServiceErrorCode.InvalidArgs);
+      }
+      LOGGER.info("JING 5MB | stitch final {} {} ", chunksToStitch, totalStitchedBlobSize);
+      //the actual blob size for stitched blob is the sum of all the chunk sizes
+      restResponseChannel.setHeader(Headers.BLOB_SIZE, totalStitchedBlobSize);
+      return chunksToStitch;
+
+/*
       if (signedChunkIds.isEmpty()) {
         throw new RestServiceException("Must provide at least one ID in stitch request",
             RestServiceErrorCode.MissingArgs);
@@ -476,6 +517,7 @@ public class NamedBlobPostHandler {
       //the actual blob size for stitched blob is the sum of all the chunk sizes
       restResponseChannel.setHeader(Headers.BLOB_SIZE, totalStitchedBlobSize);
       return chunksToStitch;
+*/
     }
 
     /**

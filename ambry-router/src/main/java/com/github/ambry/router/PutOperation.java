@@ -13,6 +13,8 @@
  */
 package com.github.ambry.router;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.ambry.account.Account;
 import com.github.ambry.account.AccountService;
 import com.github.ambry.account.Container;
@@ -71,8 +73,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static com.github.ambry.rest.RestUtils.InternalKeys.*;
 
 
 /**
@@ -183,6 +190,7 @@ class PutOperation {
   private boolean isSimpleBlob;
 
   private static final Logger logger = LoggerFactory.getLogger(PutOperation.class);
+  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
    * Construct a PutOperation with the given parameters. For any operation, based on the max chunk size for puts,
@@ -674,7 +682,7 @@ class PutOperation {
       if (chunkFillingCompletedSuccessfully) {
         // If the blob size is less than 4MB or the last chunk size is less than 4MB, than this lastChunk will be
         // the chunk above.
-        logger.info("Put operation | Chunk filling completed successfully. Building last chunk");
+        logger.info("S3 5MB | Put operation | Chunk filling completed successfully. Building last chunk");
         PutChunk lastChunk = getChunkInState(ChunkState.Building);
 
         // The last chunk could be the second chunk, if the blob size is less than 8MB. We need to check if any chunk is
@@ -1527,7 +1535,7 @@ class PutOperation {
           // If first put chunk is full, but not yet prepared then mark it awaiting resolution instead of completing it.
           // This chunk will be prepared as soon as either more bytes are read from the channel, or the chunk filling
           // is complete. At that point we will have enough information to mark this blob as simple or composite blob.
-          logger.info("Put operation | Finished reading first 4 MB from channel. Awaiting blob type resolution");
+          logger.info("S3 5MB | Put operation | Finished reading first 4 MB from channel. Awaiting blob type resolution");
           state = ChunkState.AwaitingBlobTypeResolution;
         } else {
           onFillComplete(true);
@@ -2118,6 +2126,41 @@ class PutOperation {
         state = ChunkState.Complete;
         setOperationCompleted();
       }
+      // values returned are in the right order as TreeMap returns them in key-order.
+      List<Pair<StoreKey, Long>> orderedChunkIdList = new ArrayList<>(indexToChunkIdsAndChunkSizes.values()); // JING CODE
+      if (orderedChunkIdList == null || restRequest == null) {
+        logger.info("JING 5MB : finalizeMetadataChunk orderedChunkIdList is null {} {}", indexToChunkIdsAndChunkSizes, restRequest);
+        return;
+      }
+
+      try {
+        String blobs = objectMapper.writeValueAsString(orderedChunkIdList);
+        logger.info("JING 5MB : finalizeMetadataChunk auto json {}", blobs);
+        restRequest.setArg(S3_BLOB_LIST, blobs);
+      } catch (JsonProcessingException e) {
+        restRequest.setArg(S3_BLOB_LIST, orderedChunkIdList);
+        logger.info("JING 5MB : finalizeMetadataChunk not json {}", orderedChunkIdList);
+        // throw new RouterException("Failed to serialize the blob and size", RouterErrorCode.InvalidOrMismatchedStitchBlobReservedMetadataChunkId);
+      }
+
+      JSONObject jsonObject = new JSONObject();
+      for (Pair<StoreKey, Long> blobAndSize : orderedChunkIdList) {
+        JSONObject oneObject = new JSONObject().put("blob", blobAndSize.getFirst()).put("size", blobAndSize.getSecond())
+            .put("extra1", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
+            .put("extra2", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
+            .put("extra3", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
+            .put("extra4", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
+            .put("extra5", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
+            .put("extra6", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
+            .put("extra7", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
+            .put("extra8", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
+            .put("extra9", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
+            .put("extra10", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9");
+        jsonObject.accumulate("chunks", oneObject);
+      }
+      String result = jsonObject.toString();
+      logger.info("JING 5MB : finalizeMetadataChunk generated json {}", result);
+      restRequest.setArg(S3_BLOB_LIST, result);
     }
 
     /**

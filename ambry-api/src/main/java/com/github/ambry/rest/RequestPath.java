@@ -85,8 +85,8 @@ public class RequestPath {
 
     // We convert it to named blob request in the form  "/named/named-blob-sandbox/container-a/checkpoints/87833badf879a3fc7bf151adfe928eac/chk-1/_metadata"
     // i.e. we hardcode container name to 'container-a'
-
-    logger.info("S3 API | Input path: {}", path);
+    ///s3/named-blob-sandbox/?prefix=checkpoints%2F31b4b01aa9e49e93d3d4ab53cf5bc7db%2Fshared%2Fe2d717f4-fb2c-4a1f-9740-f85f8a177470%2F&delimiter=%2F&max-keys=1&encoding-type=url.
+    logger.info("S3 API | Input path: {}", path); //  for list command as above, path /s3/named-blob-sandbox/
     if (path.startsWith("/s3")) {
       // Convert to named blob request internally
       int accountStart = "/s3/".length();
@@ -97,12 +97,13 @@ public class RequestPath {
       String accountName = path.substring(accountStart, accountEnd);
       String containerName = "container-a";
       String remainingPath = path.substring(accountEnd);
+      if (remainingPath.equals("/")) remainingPath = "";
       String namedPath =
           "/named/" + accountName + "/" + containerName + (remainingPath.length() > 0 ? remainingPath : "");
       logger.info("S3 API | Converting S3 path to Named path. S3 path: {}, Named path: {}", path, namedPath);
       path = namedPath; // Store the converted path
       restRequest.setArg(S3_REQUEST, "true"); // signifies this is a s3 request
-      restRequest.setArg(S3_BUCKET, accountName); // store the bucket name
+      restRequest.setArg(S3_BUCKET, accountName); // store the bucket name. Probably accontName/containerName is bucket?
       restRequest.setArg(S3_KEY, remainingPath); // store the key name
     }
 

@@ -287,7 +287,7 @@ class AmbrySecurityService implements SecurityService {
               if (restRequest.getArgs().containsKey("uploadId")) {
                 // If PUT + ?uploadId is present, this is a s3 multipart upload for chunk. Return 200 instead of 201
                 responseChannel.setStatus(ResponseStatus.Ok);
-              } else {
+              } else { // PUT: /s3/named-blob-sandbox/checkpoints/d6f328e11efcc4f45cb0ed8b124ddaab/shared/94559f6b-d6f5-48fc-94c5-e67d236a7646
                 responseChannel.setStatus(ResponseStatus.Created);
               }
               responseChannel.setHeader(RestUtils.Headers.CONTENT_LENGTH, 0);

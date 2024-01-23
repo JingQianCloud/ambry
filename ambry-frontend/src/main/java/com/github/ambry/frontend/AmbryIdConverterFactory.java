@@ -108,7 +108,7 @@ public class AmbryIdConverterFactory implements IdConverterFactory {
       frontendMetrics.idConverterRequestRate.mark();
       long startTimeInMs = System.currentTimeMillis();
       try {
-        LOGGER.info("AmbryIdConverter | convert method. Rest request: {}", restRequest);
+        LOGGER.info("S3 API | AmbryIdConverter | convert method. Rest request: {}", restRequest);
         if (!isOpen) {
           exception = new RestServiceException("IdConverter is closed", RestServiceErrorCode.ServiceUnavailable);
         } else if (restRequest.getRestMethod().equals(RestMethod.POST) && !restRequest.getArgs()
@@ -116,9 +116,9 @@ public class AmbryIdConverterFactory implements IdConverterFactory {
           // For S3, POST requests with ?uploadId=<> are used in completion of multipart uploads. For eg,
           // POST /s3/named-blob-sandbox/checkpoints/246cd68fa3480b2b0f9e6524fa473bca?uploadId=<SignedURL>.
           // For such use-case, we want to treat it as named blob upload
-          convertedId = "/" + signIdIfRequired(restRequest, input);
+          convertedId = "/" + signIdIfRequired(restRequest, input); // old code, not related
         } else if (restRequest.getRestMethod().equals(RestMethod.PUT) && RestUtils.isChunkUpload(restRequest.getArgs())
-            && restRequest.getArgs().containsKey(S3_REQUEST)) {
+            && restRequest.getArgs().containsKey(S3_REQUEST)) { // One Multipart chunk
           // For S3, PUT requests with ?uploadId=<> are used in adding individual part of multipart upload. For eg,
           // PUT /s3_named-blob-sandbox_container-a/checkpoints/42b6b3f29b2f9e0b629ff03dac4e9302/shared/
           // c29b1701-de55-463d-a129-adaa90c1fc23?uploadId=
@@ -126,9 +126,9 @@ public class AmbryIdConverterFactory implements IdConverterFactory {
           // %26x-ambry-content-type%3Dapplication%252Foctet-stream%26x-ambry-chunk-upload%3Dtrue%26x-ambry-url-type%3D
           // POST%26x-ambry-session%3D3a2aeb6f-aeed-4944-881e-19d41a6b7a22%26et%3D1703180930&partNumber=1
           // For such case, we want to give out chunk ID.
-          convertedId = signIdIfRequired(restRequest, input);
-          LOGGER.info("chunk upload for S3. Converted id {}", convertedId);
-        } else {
+          convertedId = signIdIfRequired(restRequest, input); // JING 5MB
+          LOGGER.info("JING 5MB | chunk upload for S3. Converted id {} blobs {}", convertedId, restRequest.getArgs().get(S3_BLOB_LIST));
+        } else { // PUT /s3/named-blob-sandbox/checkpoints/d6f328e11efcc4f45cb0ed8b124ddaab/shared/94559f6b-d6f5-48fc-94c5-e67d236a7646.Generate one Blob ID for it. Is that one chunk?
           CallbackUtils.callCallbackAfter(convertId(input, restRequest, blobInfo),
               (id, e) -> completeConversion(id, e, future, callback));
         }
@@ -198,7 +198,7 @@ public class AmbryIdConverterFactory implements IdConverterFactory {
           conversionFuture = getNamedBlobDb().get(namedBlobPath.getAccountName(), namedBlobPath.getContainerName(),
               namedBlobPath.getBlobName(), getOption).thenApply(NamedBlobRecord::getBlobId);
         }
-      } else if ((restRequest.getRestMethod() == RestMethod.PUT || restRequest.getRestMethod() == RestMethod.POST)
+      } else if ((restRequest.getRestMethod() == RestMethod.PUT || restRequest.getRestMethod() == RestMethod.POST) // Just added POST as well
           && RestUtils.getRequestPath(restRequest).matchesOperation(Operations.NAMED_BLOB)) {
         // For S3, Multipart upload completion is a POST method. So, adding POST method check avove.
         Objects.requireNonNull(blobInfo, "blobInfo cannot be null.");

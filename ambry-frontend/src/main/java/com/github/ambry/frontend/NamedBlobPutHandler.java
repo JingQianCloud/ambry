@@ -187,12 +187,12 @@ public class NamedBlobPutHandler {
         if (restRequest.getArgs().containsKey("uploadId")) {
           // This is a put chunk request in s3 multipart uploads
           String signedUrl = (String) restRequest.getArgs().get("uploadId");
-          LOGGER.info("Multipart chunk upload for S3. URL string is {}", signedUrl);
+          LOGGER.info("S3 5MB | Multipart chunk upload for S3. URL string is {}", signedUrl);
           UrlBuilder urlBuilder = UrlBuilder.parse(signedUrl);
-          LOGGER.info("Built URL from string. URL is {}", urlBuilder);
+          LOGGER.info("S3 5MB | Built URL from string. URL is {}", urlBuilder);
           for (String parameter : urlBuilder.getQuery().keySet()) {
             String value = urlBuilder.getQuery().get(parameter);
-            LOGGER.info("Multipart chunk upload for S3. Adding query parameter {} and value {}", parameter, value);
+            LOGGER.info("S3 5MB | Multipart chunk upload for S3. Adding query parameter {} and value {}", parameter, value);
             restRequest.setArg(parameter, value);
           }
         }
@@ -254,7 +254,7 @@ public class NamedBlobPutHandler {
      * @return a {@link Callback} to be used with {@link Router#putBlob}.
      */
     private Callback<String> routerPutBlobCallback(BlobInfo blobInfo) {
-      return buildCallback(frontendMetrics.putRouterPutBlobMetrics, blobId -> {
+      return buildCallback(frontendMetrics.putRouterPutBlobMetrics, blobId -> {  // JING 5MB
         setSignedIdMetadataAndBlobSize(blobInfo.getBlobProperties());
         idConverter.convert(restRequest, blobId, blobInfo, idConverterCallback(blobInfo, blobId));
       }, uri, LOGGER, deleteDatasetCallback);
@@ -298,7 +298,8 @@ public class NamedBlobPutHandler {
       return buildCallback(frontendMetrics.putIdConversionMetrics, convertedBlobId -> {
         restResponseChannel.setHeader(RestUtils.Headers.LOCATION, convertedBlobId);
         if (restRequest.getArgs().containsKey("uploadId")) {
-          restResponseChannel.setHeader("ETag", convertedBlobId);
+          //restResponseChannel.setHeader("ETag", convertedBlobId);
+          restResponseChannel.setHeader("ETag", restRequest.getArgs().get(S3_BLOB_LIST));
         }
         if (blobInfo.getBlobProperties().getTimeToLiveInSeconds() == Utils.Infinite_Time) {
           // Do ttl update with retryExecutor. Use the blob ID returned from the router instead of the converted ID

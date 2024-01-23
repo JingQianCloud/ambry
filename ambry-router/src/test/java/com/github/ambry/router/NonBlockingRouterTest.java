@@ -14,6 +14,8 @@
 package com.github.ambry.router;
 
 import com.codahale.metrics.MetricRegistry;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.ambry.account.Account;
 import com.github.ambry.account.Container;
 import com.github.ambry.clustermap.DataNodeId;
@@ -46,6 +48,7 @@ import com.github.ambry.rest.MockRestRequest;
 import com.github.ambry.rest.RestMethod;
 import com.github.ambry.rest.RestRequest;
 import com.github.ambry.server.ServerErrorCode;
+import com.github.ambry.store.MockId;
 import com.github.ambry.store.StoreKey;
 import com.github.ambry.utils.MockTime;
 import com.github.ambry.utils.Pair;
@@ -73,6 +76,7 @@ import java.util.Map;
 import java.util.PrimitiveIterator;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -86,6 +90,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import javax.sql.DataSource;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -96,6 +101,7 @@ import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static com.github.ambry.rest.RestUtils.InternalKeys.*;
 import static com.github.ambry.router.RouterTestHelpers.*;
 import static com.github.ambry.utils.TestUtils.*;
 import static org.junit.Assert.*;
@@ -3072,6 +3078,41 @@ public class NonBlockingRouterTest extends NonBlockingRouterTestBase {
     Pair<BlobId, DataNodeId> result = blobDelete503AndThenFixedByODROrOffline(true, true);
     BlobId blobId = result.getFirst();
     verifyRepairRequestRecordInDb(repairDb, blobId, null);
+  }
+
+  @Test
+  public void testCompositeBlobUpload() throws Exception {
+    final TreeMap<Integer, Pair<StoreKey, Long>> indexToChunkIdsAndChunkSizes = new TreeMap<>();
+    indexToChunkIdsAndChunkSizes.put(1, new Pair<StoreKey, Long>(new MockId("abc"), 1000l));
+    indexToChunkIdsAndChunkSizes.put(2, new Pair<StoreKey, Long>(new MockId("cde"), 1001l));
+    final ObjectMapper objectMapper = new ObjectMapper();
+    // values returned are in the right order as TreeMap returns them in key-order.
+    List<Pair<StoreKey, Long>> orderedChunkIdList = new ArrayList<>(indexToChunkIdsAndChunkSizes.values());
+    try {
+      String blobs = objectMapper.writeValueAsString(orderedChunkIdList);
+      logger.info("JING 5MB : finalizeMetadataChunk " + blobs);
+      JSONObject jsonObject = new JSONObject(); //.put("chunks", new JSONArray());
+      for (Pair<StoreKey, Long> blob : orderedChunkIdList) {
+        JSONObject oneObject = new JSONObject().put("blob", blob.getFirst()).put("size", blob.getSecond());
+        jsonObject.accumulate("chunks", oneObject);
+      }
+      String result = jsonObject.toString();
+      logger.info("JING 5MB : finalizeMetadataChunk {} " + result);
+    } catch (JsonProcessingException e) {
+      logger.info("JING 5MB : finalizeMetadataChunk not json " + orderedChunkIdList);
+    }
+
+    // CompositeBlob with four chunks.
+    maxPutChunkSize = PUT_CONTENT_SIZE / 4;
+    String serviceID = "delete-service";
+    MockServerLayout layout = new MockServerLayout(mockClusterMap);
+    String localDcName = "DC3";
+    setRouter(getNonBlockingRouterPropertiesForRepairRequests(localDcName, true, false), layout,
+        new LoggingNotificationSystem());
+    setOperationParams();
+    String compositeBlobId =
+        router.putBlob(putBlobProperties, putUserMetadata, putChannel, new PutBlobOptionsBuilder().build())
+            .get(AWAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
   }
 
   /**

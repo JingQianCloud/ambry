@@ -157,7 +157,7 @@ public class AmbryUrlSigningService implements UrlSigningService {
       if (chunkUpload) {
         // Chunks of a stitched blob have a fixed max size to ensure that the router does not do further chunking as
         // this is not supported by the current metadata format.
-        maxUploadSize = chunkUploadMaxChunkSize;
+        maxUploadSize = chunkUploadMaxChunkSize; // chunk size
         // They also have a non-optional blob TTL to ensure that chunks that were not stitched within a reasonable time
         // span are cleaned up.
         if (RestUtils.getLongHeader(args, RestUtils.Headers.TTL, false) == null) {
