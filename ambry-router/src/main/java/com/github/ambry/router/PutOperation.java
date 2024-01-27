@@ -367,11 +367,10 @@ class PutOperation {
     }
     Exception exception = null;
     try {
-      if (options.isChunkUpload() && options.getMaxUploadSize() > routerConfig.routerMaxPutChunkSizeBytes) {
-        logger.info("Chunk upload has size {} greater than 4 MB", options.getMaxUploadSize());
-        // If going with "router.max.put.chunk.size.bytes" = 5 MB, we can uncomment below
-        //exception = new RouterException("Invalid max upload size for chunk upload: " + options.getMaxUploadSize(),
-        //    RouterErrorCode.InvalidPutArgument);
+      if (options.isChunkUpload() && options.getMaxUploadSize() > routerConfig.routerMaxPutChunkSizeBytes
+          && !restRequest.getArgs().containsKey(S3_REQUEST)) {
+        exception = new RouterException("Invalid max upload size for chunk upload: " + options.getMaxUploadSize(),
+            RouterErrorCode.InvalidPutArgument);
       }
 
       if (isStitchOperation()) {
@@ -2103,7 +2102,38 @@ class PutOperation {
               passedInBlobProperties.getAccountId(), passedInBlobProperties.getContainerId(),
               passedInBlobProperties.isEncrypted(), passedInBlobProperties.getExternalAssetTag(),
               passedInBlobProperties.getContentEncoding(), passedInBlobProperties.getFilename(), null);
-      if (isStitchOperation() || getNumDataChunks() > 1) {
+      if (restRequest.getArgs().containsKey(S3_REQUEST)) {
+        // values returned are in the right order as TreeMap returns them in key-order.
+        List<Pair<StoreKey, Long>> orderedChunkIdList = new ArrayList<>(indexToChunkIdsAndChunkSizes.values()); // JING CODE
+        if (orderedChunkIdList == null || restRequest == null) {
+          logger.info("JING 5MB : finalizeMetadataChunk orderedChunkIdList is null {} {}", indexToChunkIdsAndChunkSizes, restRequest);
+          return;
+        }
+
+        try {
+          String blobs = objectMapper.writeValueAsString(orderedChunkIdList);
+          logger.info("JING 5MB : finalizeMetadataChunk auto json {}", blobs);
+          restRequest.setArg(S3_BLOB_LIST, blobs);
+        } catch (JsonProcessingException e) {
+          restRequest.setArg(S3_BLOB_LIST, orderedChunkIdList);
+          logger.info("JING 5MB : finalizeMetadataChunk not json {}", orderedChunkIdList);
+          // throw new RouterException("Failed to serialize the blob and size", RouterErrorCode.InvalidOrMismatchedStitchBlobReservedMetadataChunkId);
+        }
+
+        JSONObject jsonObject = new JSONObject();
+        for (Pair<StoreKey, Long> blobAndSize : orderedChunkIdList) {
+          JSONObject oneObject = new JSONObject().put("blob", blobAndSize.getFirst()).put("size", blobAndSize.getSecond());
+          jsonObject.accumulate("chunks", oneObject);
+        }
+        String result = jsonObject.toString();
+        logger.info("JING 5MB : finalizeMetadataChunk generated json {}", result);
+        restRequest.setArg(S3_BLOB_LIST, result);
+
+        // close the request as the one chunk blob
+        blobId = (BlobId) indexToChunkIdsAndChunkSizes.get(0).getFirst();
+        state = ChunkState.Complete;
+        setOperationCompleted();
+      } else if (isStitchOperation() || getNumDataChunks() > 1) {
         ByteBuffer serialized = null;
         // values returned are in the right order as TreeMap returns them in key-order.
         if (routerConfig.routerMetadataContentVersion == MessageFormatRecord.Metadata_Content_Version_V2) {
@@ -2126,41 +2156,6 @@ class PutOperation {
         state = ChunkState.Complete;
         setOperationCompleted();
       }
-      // values returned are in the right order as TreeMap returns them in key-order.
-      List<Pair<StoreKey, Long>> orderedChunkIdList = new ArrayList<>(indexToChunkIdsAndChunkSizes.values()); // JING CODE
-      if (orderedChunkIdList == null || restRequest == null) {
-        logger.info("JING 5MB : finalizeMetadataChunk orderedChunkIdList is null {} {}", indexToChunkIdsAndChunkSizes, restRequest);
-        return;
-      }
-
-      try {
-        String blobs = objectMapper.writeValueAsString(orderedChunkIdList);
-        logger.info("JING 5MB : finalizeMetadataChunk auto json {}", blobs);
-        restRequest.setArg(S3_BLOB_LIST, blobs);
-      } catch (JsonProcessingException e) {
-        restRequest.setArg(S3_BLOB_LIST, orderedChunkIdList);
-        logger.info("JING 5MB : finalizeMetadataChunk not json {}", orderedChunkIdList);
-        // throw new RouterException("Failed to serialize the blob and size", RouterErrorCode.InvalidOrMismatchedStitchBlobReservedMetadataChunkId);
-      }
-
-      JSONObject jsonObject = new JSONObject();
-      for (Pair<StoreKey, Long> blobAndSize : orderedChunkIdList) {
-        JSONObject oneObject = new JSONObject().put("blob", blobAndSize.getFirst()).put("size", blobAndSize.getSecond())
-            .put("extra1", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
-            .put("extra2", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
-            .put("extra3", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
-            .put("extra4", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
-            .put("extra5", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
-            .put("extra6", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
-            .put("extra7", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
-            .put("extra8", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
-            .put("extra9", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9")
-            .put("extra10", "eyJtZXRhZGF0YSI6eyJ4LWFtYnJ5LWJsb2Itc2l6ZSI6IjUyNDY1NjYiLCJ4LWFtYnJ5LXNlc3Npb24iOiIzYTJhZWI2Zi1hZWVkLTQ5NDQtODgxZS0xOWQ0MWE2YjdhMjIiLCJldCI6IjE3MDU1OTk4MzU0NzUifSwiYmxvYklkIjoiQUFZUUFRQmxBQWdBQVFBQUFBQUFBQUFBVGoxUzFvU3hRRG0zR0RvaEwxOEFydyJ9");
-        jsonObject.accumulate("chunks", oneObject);
-      }
-      String result = jsonObject.toString();
-      logger.info("JING 5MB : finalizeMetadataChunk generated json {}", result);
-      restRequest.setArg(S3_BLOB_LIST, result);
     }
 
     /**

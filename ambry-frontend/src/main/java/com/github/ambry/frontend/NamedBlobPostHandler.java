@@ -438,7 +438,6 @@ public class NamedBlobPostHandler {
 
       LOGGER.info("JING 5MB | stitch | received {} parts are {}", completeMultipartUpload.getPart().length, completeMultipartUpload.getPart());
       List<ChunkInfo> chunksToStitch = new ArrayList<>(signedChunkIds.size()); // JING CODE
-      String expectedSession = null;
       long totalStitchedBlobSize = 0;
       if (completeMultipartUpload.getPart().length == 0) {
         throw new RestServiceException("Must provide at least one ID in stitch request",
@@ -447,77 +446,46 @@ public class NamedBlobPostHandler {
 
       try {
         for (Part part : completeMultipartUpload.getPart()) {
-          LOGGER.info("JING 5MB | stitch | part is {} {}", part);
+          //LOGGER.info("JING 5MB | stitch | part is {} {}", part);
           signedChunkIds.add(part.geteTag());
           // pass the etag
           JsonNode jsonNode = objectMapper.readTree(part.geteTag());
+          // session id
           jsonNode = jsonNode.get("chunks");
           if (jsonNode.isArray()) {
             for (final JsonNode objNode : jsonNode) {
               String blobId = objNode.get("blob").textValue();
+              verifyChunkAccountAndContainer(blobId, stitchedBlobProperties);
+              //reservedMetadataBlobId = getAndVerifyReservedMetadataBlobId(metadata, reservedMetadataBlobId, blobId);
+              //long expirationTimeMs = RestUtils.getLongHeader(metadata, EXPIRATION_TIME_MS_KEY, true);
+
               Long chunkSizeBytes = objNode.get("size").longValue();
               totalStitchedBlobSize += chunkSizeBytes;
               chunksToStitch.add(new ChunkInfo(blobId, chunkSizeBytes, -1, reservedMetadataBlobId));
-              LOGGER.info("JING 5MB | stitch entry | {} {}", blobId, chunkSizeBytes);
             }
           } else if (jsonNode.isObject()) {
             String blobId = jsonNode.get("blob").textValue();
+            verifyChunkAccountAndContainer(blobId, stitchedBlobProperties);
+            //reservedMetadataBlobId = getAndVerifyReservedMetadataBlobId(metadata, reservedMetadataBlobId, blobId);
+            //long expirationTimeMs = RestUtils.getLongHeader(metadata, EXPIRATION_TIME_MS_KEY, true);
+
             Long chunkSizeBytes = jsonNode.get("size").longValue();
             totalStitchedBlobSize += chunkSizeBytes;
             chunksToStitch.add(new ChunkInfo(blobId, chunkSizeBytes, -1, reservedMetadataBlobId));
             LOGGER.info("JING 5MB | stitch single | {} {}", blobId, chunkSizeBytes);
           } else {
-            LOGGER.info("JING 5MB | what's this {}", jsonNode);
+            LOGGER.error("JING 5MB | Not expected JSON content {}", jsonNode);
+            throw new RestServiceException("Not expected JSON content " + jsonNode, RestServiceErrorCode.InvalidArgs);
           }
         }
       } catch (Exception e) {
-        LOGGER.info("JING 5MB | stitch | exception", e);
-        throw new RestServiceException("Wrong argument", RestServiceErrorCode.InvalidArgs);
+        LOGGER.error("JING 5MB | stitch | Wrong argument", e);
+        throw new RestServiceException("", RestServiceErrorCode.InvalidArgs);
       }
       LOGGER.info("JING 5MB | stitch final {} {} ", chunksToStitch, totalStitchedBlobSize);
       //the actual blob size for stitched blob is the sum of all the chunk sizes
       restResponseChannel.setHeader(Headers.BLOB_SIZE, totalStitchedBlobSize);
       return chunksToStitch;
-
-/*
-      if (signedChunkIds.isEmpty()) {
-        throw new RestServiceException("Must provide at least one ID in stitch request",
-            RestServiceErrorCode.MissingArgs);
-      }
-      List<ChunkInfo> chunksToStitch = new ArrayList<>(signedChunkIds.size());
-      String expectedSession = null;
-      long totalStitchedBlobSize = 0;
-      for (String signedChunkId : signedChunkIds) {
-        signedChunkId =
-            RequestPath.parse(signedChunkId, Collections.emptyMap(), frontendConfig.pathPrefixesToRemove, clusterName)
-                .getOperationOrBlobId(false);
-        if (!idSigningService.isIdSigned(signedChunkId)) {
-          throw new RestServiceException("All chunks IDs must be signed: " + signedChunkId,
-              RestServiceErrorCode.BadRequest);
-        }
-        Pair<String, Map<String, String>> idAndMetadata = idSigningService.parseSignedId(signedChunkId);
-        String blobId = idAndMetadata.getFirst();
-        Map<String, String> metadata = idAndMetadata.getSecond();
-
-        expectedSession = RestUtils.verifyChunkUploadSession(metadata, expectedSession);
-        @SuppressWarnings("ConstantConditions")
-        long chunkSizeBytes = RestUtils.getLongHeader(metadata, Headers.BLOB_SIZE, true);
-
-        totalStitchedBlobSize += chunkSizeBytes;
-        // Expiration time is sent to the router, but not verified in this handler. The router is responsible for making
-        // checks related to internal ambry requirements, like making sure that the chunks do not expire before the
-        // metadata blob.
-        @SuppressWarnings("ConstantConditions")
-        long expirationTimeMs = RestUtils.getLongHeader(metadata, EXPIRATION_TIME_MS_KEY, true);
-        verifyChunkAccountAndContainer(blobId, stitchedBlobProperties);
-        reservedMetadataBlobId = getAndVerifyReservedMetadataBlobId(metadata, reservedMetadataBlobId, blobId);
-
-        chunksToStitch.add(new ChunkInfo(blobId, chunkSizeBytes, expirationTimeMs, reservedMetadataBlobId));
-      }
-      //the actual blob size for stitched blob is the sum of all the chunk sizes
-      restResponseChannel.setHeader(Headers.BLOB_SIZE, totalStitchedBlobSize);
-      return chunksToStitch;
-*/
     }
 
     /**
