@@ -73,7 +73,11 @@ public class S3PutHandler extends S3BaseHandler<Void> {
     NamedBlobPath namedBlobPath = NamedBlobPath.parse(getRequestPath(restRequest), restRequest.getArgs());
     String accountName = namedBlobPath.getAccountName();
     restRequest.setArg(Headers.SERVICE_ID, accountName);
-    restRequest.setArg(Headers.AMBRY_CONTENT_TYPE, restRequest.getArgs().get(Headers.CONTENT_TYPE));
+    if (restRequest.getArgs().get(Headers.CONTENT_TYPE) == null) {
+      restRequest.setArg(Headers.AMBRY_CONTENT_TYPE, "application/octet-stream");
+    } else {
+      restRequest.setArg(Headers.AMBRY_CONTENT_TYPE, restRequest.getArgs().get(Headers.CONTENT_TYPE));
+    }
     restRequest.setArg(Headers.AMBRY_CONTENT_ENCODING, restRequest.getArgs().get(Headers.CONTENT_ENCODING));
 
     // 2. Upload the blob by following named blob PUT path

@@ -105,8 +105,8 @@ public class S3ListHandler extends S3BaseHandler<ReadableStreamChannel> {
     int keyCount = 0;
     for (NamedBlobListEntry namedBlobRecord : namedBlobRecordPage.getEntries()) {
       String blobName = namedBlobRecord.getBlobName();
-      String todayDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ").format(Calendar.getInstance().getTime());
-      contentsList.add(new Contents(blobName, todayDate));
+      String todayDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(Calendar.getInstance().getTime());
+      contentsList.add(new Contents(blobName, todayDate, -1));
       if (++keyCount == maxKeysValue) {
         break;
       }

@@ -161,10 +161,18 @@ public class S3MessagePayload {
     private String prefix;
     @JacksonXmlProperty(localName = "MaxKeys")
     private int maxKeys;
+    @JacksonXmlProperty(localName = "CommonPrefixes")
+    private String commonPrefixes;
     @JacksonXmlProperty(localName = "KeyCount")
     private int keyCount;
     @JacksonXmlProperty(localName = "Delimiter")
     private String delimiter;
+    @JacksonXmlProperty(localName = "ContinuationToken")
+    private String continuationToken;
+    @JacksonXmlProperty(localName = "NextContinuationToken")
+    private String nextContinuationToken;
+    @JacksonXmlProperty(localName = "StartAfter")
+    private String startAfter;
     @JacksonXmlProperty(localName = "Contents")
     @JacksonXmlElementWrapper(useWrapping = false)
     private List<Contents> contents;
@@ -218,17 +226,33 @@ public class S3MessagePayload {
   }
 
   public static class Contents {
+    @JacksonXmlProperty(localName = "ChecksumAlgorithm")
+    private String checksumAlgorithm;
+    @JacksonXmlProperty(localName = "ETag")
+    private String eTag;
     @JacksonXmlProperty(localName = "Key")
     private String key;
     @JacksonXmlProperty(localName = "LastModified")
     private String lastModified;
 
+    @JacksonXmlProperty(localName = "DisplayName")
+    private String displayName;
+
+    @JacksonXmlProperty(localName = "RestoreStatus")
+    private String restoreStatus;
+
+    @JacksonXmlProperty(localName = "Size")
+    private long size;
+
+    @JacksonXmlProperty(localName = "StorageClass")
+    private String storageClass;
     private Contents() {
     }
 
-    public Contents(String key, String lastModified) {
+    public Contents(String key, String lastModified, long size) {
       this.key = key;
       this.lastModified = lastModified;
+      this.size = size;
     }
 
     public String getKey() {
